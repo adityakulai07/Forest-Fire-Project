@@ -1,0 +1,366 @@
+---
+title: "AdityaKulai_GauriBansal_GauravCariappa_KonainMukadam"
+author: "Aditya Kulai Gauri Bansal Gaurav Cariappa Konain Mukadam"
+date: "December 13, 2017"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Objective of our Analysis:
+
+The goal is to learn more about the factors that lead to particularly damaging forest fires and then building a machine learning model to predict forest fires. The variable of interest is *area* in our analysis.
+
+
+#Approach:
+
+1) EDA: We will first conduct a basic exploratory analysis of the given dataset and determine correlations between area burnt and other parameters( factoring day and month). In our EDA, we will try and determine the strength of correlations between area burnt and other factors we take into consideration (in turn determine whether these factors are responsible for significantly damaging fires), we will then determine whether the strength of observed correlations lets us make a prediction using a linear or polynomial regression model.
+
+2) Building a machine Learning Model: After our EDA, we will try using the Random Forest, SVM Classifier(linear and Kernel) and Gradient Boosting, we will then compare the accuracy of each of these models and make a decision as to which is the Best model to use in our prediction scenario.
+
+#Loading Required Libraries
+```{r, warning=FALSE, message=FALSE}
+library(Hmisc)
+library(plyr)
+library(dplyr)
+library(car)
+library(ggplot2)
+library(GGally)
+library(Hmisc)
+library(psych)
+```
+
+```{r, warning=FALSE, message=FALSE}
+df.forest<- read.csv("~/R/R Working Directory/forestfires.csv", header=TRUE, stringsAsFactors= FALSE)
+summary(df.forest)
+```
+
+#Filtering non zero area
+```{r, warning=FALSE, message=FALSE}
+chce_mod<- subset(df.forest, area!=0)
+```
+
+#270 observations of non zero areas are affected, we will still consider the 0 area affected Values as occurences
+```{r, warning=FALSE, message=FALSE}
+str(chce_mod)
+```
+
+# The mean area burnt taking the entire Data Set into account is 12.84729
+```{r, warning=FALSE, message=FALSE}
+mean(df.forest$area)
+```
+
+
+# The mean area burnt taking the Non-Zero affected values of the Data Set into account is 24.60019
+
+```{r, warning=FALSE, message=FALSE}
+mean(chce_mod$area)
+```
+
+
+# Area by Month
+```{r, warning=FALSE, message=FALSE}
+ggplot(data=df.forest, aes(x=month, y=area, fill=month)) + 
+  geom_bar(stat="identity") +
+  guides(fill=FALSE) +
+  ggtitle("Total area burned by month")
+library(psych)
+Area_df<- aggregate(area~month, data=df.forest,sum)
+Area_df
+```
+
+# Occurence by Month
+```{r, warning=FALSE, message=FALSE}
+chce<- subset(df.forest, area!=0, month)
+count(chce, month)
+discrete_month <- factor(chce$month, levels=c("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"))
+barplot(table(discrete_month),las=3)
+```
+
+# Area by Day
+```{r, warning=FALSE, message=FALSE}
+ggplot(data=df.forest, aes(x=day, y=area, fill=month)) + 
+  geom_bar(stat="identity") +
+  guides(fill=FALSE) +
+  ggtitle("Total area burned by day")
+day_df<- aggregate(area~day, data=df.forest,sum)
+day_df
+```
+
+# Occurence by Day
+Intersting Observation here is that Friday has the Least Total Area Burnt. but the 2nd Highest Occurences
+```{r, warning=FALSE, message=FALSE}
+chce1<- subset(df.forest, area!=0, day)
+count(chce1, day)
+discrete_day <- factor(chce1$day, levels=c("mon","tue","wed","thu","fri","sat","sun"))
+barplot(table(discrete_day), las=3)
+```
+
+
+# Subsetting for corplot numeric data entry, running corplot on entire Data Set
+```{r, warning=FALSE, message=FALSE}
+df.forest1<- df.forest[c(1,2,5:13)]
+library( corrplot)
+corrplot(cor(df.forest1[ ,1:11]), method = "number")
+```
+
+# Subset for top 10 Fire Breakouts
+#Note: 4 of the Top 10 Fires occured on a Saturday
+
+```{r, warning=FALSE, message=FALSE}
+df.forest10<- head(df.forest[order(df.forest$area, decreasing=TRUE), ], 10)
+df.forest10
+df.forest10_adjust<- df.forest10[c(1,2,5:13)] ## adjust for corplot entry
+corrplot(cor(df.forest10_adjust[ ,1:11]), method = "number")
+count(df.forest10,day)
+```
+
+
+#Subset for top 20 Fire Breakouts
+```{r, warning=FALSE, message=FALSE}
+df.forest20<- head(df.forest[order(df.forest$area, decreasing=TRUE), ], 20)
+
+df.forest20
+
+df.forest20_adjust<- df.forest20[c(1,2,5:13)] ## adjust for corplot entry
+
+corrplot(cor(df.forest20_adjust[ ,1:11]), method = "number")
+```
+
+
+# Subset for top 200 Fire Breakout
+```{r, warning=FALSE, message=FALSE}
+df.forest200<- head(df.forest[order(df.forest$area, decreasing=TRUE), ], 200)
+
+
+df.forest200_adjust<- df.forest200[c(1,2,5:13)] ## adjust for corplot entry
+
+corrplot(cor(df.forest200_adjust[ ,1:11]), method = "number")
+```
+
+#From above we observe that
+
+1) We notice a decrease in Correlation Coefficient between area and temperature, ISI from the Top 10 (0.53,0.45) to top 20 (0.21,0.25) and negligible in the sample of top 200(approx 0,0.14)
+ 
+2) We also notice a weak Correlation between Area and every other parameter within the Entire dataset
+
+3) Hence, we decided that neither Ploynomial nor Linear Correlation can be useful to predict in this case
+
+#Examining our Data Set for Outliers: 
+
+We run Boxplots on all Parameters and determine cases where there is a dense concentration of outliers.
+Parameters with Considerable Outliers (we find that ISI DMC and area have data with considerable amount of outliers).
+
+```{r, warning=FALSE, message=FALSE}
+boxplot(log((df.forest$area)+1), main='area') 
+
+boxplot(log((df.forest$DMC)+1), main='DMC') 
+
+boxplot(log((df.forest$ISI)+1), main='ISI') 
+```
+
+#Solution for Objective 1: Descriptive Analysis
+
+We categorized the paticularly damaging fires, to be the ones to affect most area (top 10). 
+On observing the correlation matrix for the top 10 fires (refer the corrplot of df.forest10 above) we notice the following correlation coefficients of significance between area and 5 other parametres:
+
+1) temprature * (0.53)
+2) ISI * (0.45)
+3) RH * (-0.46)
+4) FFMC * (0.39)
+5) Wind * (0.3)
+
+Note: RH is the only parameter with a negative correlation coefficient that is an increase in RH results a lesser area burnt in the top 10 area burnt data set.
+
+
+#Loading required libraries
+```{r, warning=FALSE, message=FALSE}
+library(randomForest)
+library(corrplot)
+library(psych)
+library(e1071)
+library(caret)
+library(ggplot2)
+library(gbm)
+library(dplyr)
+library(kernlab)
+library(ROCR)
+
+```
+
+#Importing Data
+```{r, warning=FALSE, message=FALSE}
+df.forest <- tbl_df(df.forest)
+set.seed(1234)
+```
+
+#Checking skewness by using log transformation
+```{r, warning=FALSE, message=FALSE}
+hist(df.forest$area)
+rug(df.forest$area)
+df.forest <- mutate(df.forest, y = log(area + 1))  
+hist(df.forest$y)
+```
+
+# Normalize
+# Subtracting the min value in x and dividing by the range of values in x.
+```{r, warning=FALSE, message=FALSE}
+normalise <- function(x) {
+  return((x - min(x)) / (max(x) - min(x)))  
+}
+df.forest$temp <- normalise(df.forest$temp)
+df.forest$rain <- normalise(df.forest$rain)
+df.forest$RH <- normalise(df.forest$RH)
+df.forest$wind <- normalise(df.forest$wind)
+```
+
+#Checking the Number of Small and Large fires
+```{r, warning=FALSE, message=FALSE}
+sum(df.forest$area < 5)
+sum(df.forest$area >= 5)
+```
+
+#Creating a new column and add 'small' and 'large' labels for area<5 hectares and area>=5 hectares respectively
+```{r, warning=FALSE, message=FALSE}
+df.forest$size <- NULL
+df.forest$size <- factor(ifelse(df.forest$area < 5, 0, 1),
+                         labels = c("small", "large"))
+```
+
+#Seperating into data into training and testing
+```{r, warning=FALSE, message=FALSE}
+intrain <- sample(x = nrow(df.forest), size = 400, replace = FALSE)
+```
+
+#Training Linear SVM Classifier
+```{r, warning=FALSE, message=FALSE}
+m.lin <- svm(size ~ temp + RH + wind + rain,
+             data = df.forest[intrain, ],
+             kernel = "linear", C = 1)
+m.lin
+```
+
+#Checking error rate of training model
+```{r, warning=FALSE, message=FALSE}
+#predict and check accuracy
+pred <- predict(m.lin, newdata = df.forest[-intrain, ], type = "response")
+table(pred, df.forest[-intrain, "size"][[1]])  
+confusionMatrix(table(pred, df.forest[-intrain, "size"][[1]]), positive = "small")
+```
+
+#Training Polynomial SVM Classifier
+```{r, warning=FALSE, message=FALSE}
+m.poly <- ksvm(size ~ temp + RH + wind + rain,
+               data = df.forest[intrain, ],
+               kernel = "polydot", C = 1)
+m.poly
+```
+
+#Training Radial SVM Classifier
+```{r, warning=FALSE, message=FALSE}
+m.rad <- ksvm(size ~ temp + RH + wind + rain,
+              data = df.forest[intrain, ],
+              kernel = "rbfdot", C = 1)
+m.rad
+```
+
+#Training Tan SVM Classifier
+```{r, warning=FALSE, message=FALSE}
+m.tan <- ksvm(size ~ temp + RH + wind + rain,
+              data = df.forest[intrain, ],
+              kernel = "tanhdot", C = 1)
+m.tan
+```
+
+#As lowest error rate amongst the 3 classifiers above is of Radial SVM hence
+
+#Predicting using Radial SVM and checking accuracy
+```{r, warning=FALSE, message=FALSE}
+pred <- predict(m.rad, newdata = df.forest[-intrain, ], type = "response")
+table(pred, df.forest[-intrain, "size"][[1]])  
+confusionMatrix(table(pred, df.forest[-intrain, "size"][[1]]), positive = "small") # from the caret package, also need e1071 package
+```
+
+
+#To build a prediction model, we need to first split the available data into test data and training data.
+#We will first set aside a dataset of 20 observations, pulled out randomly from the existing data-set. This test data-set will be used to run the final predictive model.
+#The dataset is also divided into training dataset (60%), which will be used to build the models, and testing dataset, which will be used to test the models.
+
+```{r}
+test <- df.forest[rbinom(20, 10, 0.5),]
+# Now divide the remaining data into training and testing
+
+intrain <- createDataPartition(df.forest$size, p=0.6, list=FALSE)
+
+train_data <- df.forest[intrain, ]
+test_data <- df.forest[-intrain, ]
+
+p <- predict(m.rad , test)
+p
+```
+
+#Test ensemble classifiers - random forest and gradient boosting model
+
+#First lets fit random forest classifier and check error rate
+```{r, warning=FALSE, message=FALSE}
+forest.rf <- randomForest(size ~ temp + RH + wind + rain, data = df.forest[intrain, ], importance=TRUE, ntree=300)
+forest.rf
+#predict and find accuracy
+pred <- predict(forest.rf, newdata = df.forest[-intrain, ], type = "response")
+confusionMatrix(table(pred, df.forest[-intrain, "size"][[1]]), positive = "small")  # from the caret package, also need e1071 package
+```
+
+
+#Now using Gradient Boosting Classifier and Checking error rate
+```{r, warning=FALSE, message=FALSE}
+fitControl <- trainControl(method = "repeatedcv",
+                           number = 3,
+                           repeats = 1)
+mod_BR <- train(size ~ temp + RH + wind + rain, df.forest[intrain, ], method="gbm", trControl=fitControl, verbose = FALSE)
+```
+
+#Predicting and finding accuracy
+```{r, warning=FALSE, message=FALSE}
+pred <- predict(mod_BR, newdata = df.forest[-intrain, ])
+plot(mod_BR, main = "Model 2")
+confusionMatrix(table(pred, df.forest[-intrain, "size"][[1]]), positive = "small")  # from the caret package,
+```
+
+
+
+*#Solution for Objective 2: Predictive Analysis*
+*We have built 3 models to predict forest fires.*
+
+*1) Linear SVM Classifier*
+*The accuracy rate using Linear SVM Classifier is: 78.6*
+
+*2) Kernel SVM Classifier*
+*In SVM we have used three methods, Polynomial, Radial and Tan.*
+ *- Using Polynomial SVM  we get a Training Error of 0.3*
+ *- Using Radial SVM we get a Training Error of 0.27*
+ *- Tan SVM we get a Training Error of 0.46*
+*We got the lowest training error rate using Radial SVM hence we have used it.* 
+
+*Using Radial SVM method we get an accuracy of 79.49%*
+
+
+*3) Random Forest Classifier*
+*The accuracy using Random Forest Classifier is: 67.52%*
+
+
+*4) Gradient Boosting Classifier*
+*The accuracy using Boosting is: 71.84%*
+
+*We have compared the performance of 4 methods: Linear SVM, Kernel SVM, Random Forest, Gradient Boosting and finally selected Radial SVM Classifier as our prediction model due its least error rate and highest accuracy. Hence, the proposed model will be considerably suitable for identifying particularly damaging forest fires.*
+
+
+
+
+
+
+
+
